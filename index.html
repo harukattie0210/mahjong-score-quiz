@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>麻雀 点数計算クイズ（画像つき）</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; }
+    body { margin: 0; background:#f6f7fb; color:#111; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 20px; }
+    .card { background:#fff; border-radius: 14px; padding: 18px; box-shadow: 0 6px 18px rgba(0,0,0,.06); }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    .row { display:flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .badge { display:inline-block; padding: 6px 10px; border-radius: 999px; background:#eef2ff; font-weight: 800; }
+    .meta { color:#555; font-size: 13px; }
+    input[type="text"]{
+      width: min(420px, 100%);
+      padding: 12px 12px;
+      font-size: 18px;
+      border-radius: 10px;
+      border: 1px solid #d7dbe7;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #6b7cff; box-shadow: 0 0 0 3px rgba(107,124,255,.15); }
+    button{
+      padding: 11px 14px;
+      border: 0; border-radius: 10px;
+      font-weight: 800; font-size: 15px;
+      cursor: pointer;
+      background:#111; color:#fff;
+    }
+    button.secondary { background:#e9edf7; color:#111; }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    .ok { color:#0b7a3a; font-weight: 900; }
+    .ng { color:#b00020; font-weight: 900; }
+
+    .grid { display:grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 900px){
+      .grid { grid-template-columns: 1.35fr .65fr; }
+    }
+
+    .handBox{
+      display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;
+      margin-top: 10px;
+    }
+    .handImgWrap{
+      width: min(620px, 100%);
+      background:#fafbff;
+      border:1px solid #eef0f6;
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .handImg{
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      display:block;
+    }
+    .handFallback{
+      border-radius: 10px;
+      padding: 14px;
+      background:#0b1020;
+      color:#d7e0ff;
+      font-size: 22px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .sideInfo{
+      min-width: 240px;
+      flex: 1;
+      background:#fafbff;
+      border:1px solid #eef0f6;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .kv{ display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px dashed #e6e9f3;}
+    .kv:last-child{ border-bottom:0; }
+    .k{ color:#666; font-weight: 700; }
+    .v{ font-weight: 900; }
+    .hint{ margin-top:10px; font-size: 12px; color:#666; }
+    details { margin-top: 12px; }
+    summary { cursor: pointer; font-weight: 900; }
+    pre { white-space:pre-wrap; margin:10px 0 0; background:#0b1020; color:#d7e0ff; padding:12px; border-radius:12px; overflow:auto; }
+
+    .log { max-height: 280px; overflow: auto; border:1px solid #eef0f6; border-radius: 10px; padding: 10px; background:#fafbff; }
+    .log-item { border-bottom:1px dashed #e6e9f3; padding: 8px 2px; }
+    .log-item:last-child { border-bottom:0; }
+    .small { font-size: 12px; color:#666; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#f1f3f9; padding:2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="grid">
+      <div class="card">
+        <h1>麻雀 点数計算クイズ（画像つき・符/翻）</h1>
+
+        <div class="row meta">
+          <span class="badge">リーチ麻雀 / 赤あり</span>
+          <span>供託：0　本場：0（固定）</span>
+          <span>スコア：<b id="score">0</b> / <b id="total">0</b></span>
+          <span>連続正解：<b id="streak">0</b></span>
+        </div>
+
+        <div class="handBox">
+          <div class="handImgWrap">
+            <img id="handImg" class="handImg" alt="手牌画像" style="display:none;" />
+            <div id="handFallback" class="handFallback" style="display:none;"></div>
+          </div>
+
+          <div class="sideInfo">
+            <div class="kv"><div class="k">場</div><div class="v" id="roundWind">東場</div></div>
+            <div class="kv"><div class="k">親/子</div><div class="v" id="dealerOrChild">子</div></div>
+            <div class="kv"><div class="k">あがり</div><div class="v" id="winType">ロン</div></div>
+            <div class="kv"><div class="k">ドラ表示</div><div class="v" id="doraIndicator">🀙</div></div>
+            <div class="kv"><div class="k">符・翻（採点用）</div><div class="v" id="fuHan">30符 2翻</div></div>
+
+            <div class="hint">
+              入力ルール：<br>
+              ロンは数字1つ（例 <span class="kbd">3900</span>）<br>
+              子ツモは <span class="kbd">親/子</span>（例 <span class="kbd">2000/1000</span>）<br>
+              親ツモは <span class="kbd">2000オール</span>（<span class="kbd">2000all</span> でもOK）
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <input id="answer" type="text" inputmode="text" autocomplete="off"
+                 placeholder="例：3900 / 2000/1000 / 2000オール" />
+          <button id="submitBtn">答える（Enter）</button>
+          <button class="secondary" id="nextBtn" disabled>次へ</button>
+          <button class="secondary" id="resetBtn" title="スコアと履歴をリセット">リセット</button>
+        </div>
+
+        <div id="result" style="margin-top:12px;"></div>
+
+        <details id="detailBox" style="display:none;">
+          <summary>計算過程を見る</summary>
+          <pre id="detail"></pre>
+        </details>
+
+        <div class="small" style="margin-top:10px;">
+          ※画像は表示用です。点数採点は「符・翻（採点用）」と「親子/ツモロン」に基づきます。<br>
+          ※東場/南場は出題状況として表示します（点数計算自体には影響しません）。
+        </div>
+      </div>
+
+      <div class="card">
+        <h1>間違い履歴（直近10件）</h1>
+        <div class="small">このブラウザ内に保存します。</div>
+        <div class="log" id="mistakeLog" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // =========================
+  // 1) ここが「問題（画像）」の登録場所
+  // =========================
+  // img: GitHub Pagesなら images/xxx.jpg のように置けます
+  // handText: 画像がない場合の代替表示（牌のUnicodeなど）
+  // fu/han: 点数計算の入力値（問題として固定）
+  // doraIndicator: 画像の横に固定表示（文字でもOK）
+  const QUESTION_BANK = [
+    {
+      id: "q1",
+      img: "", // 例: "images/hand1.jpg"
+      handText: "（サンプル）手牌画像を images/hand1.jpg のように置いて img を指定してください",
+      fu: 30, han: 2,
+      doraIndicator: "🀙"
+    },
+    {
+      id: "q2",
+      img: "",
+      handText: "（例）🀇🀈🀉 🀊🀊🀊 🀌🀍🀎 🀙🀙🀙 🀅🀅",
+      fu: 40, han: 3,
+      doraIndicator: "🀐"
+    },
+    {
+      id: "q3",
+      img: "",
+      handText: "（例）🀑🀒🀓 🀔🀔🀔 🀚🀛🀜 🀝🀝🀝 🀆🀆",
+      fu: 25, han: 4,
+      doraIndicator: "🀘"
+    }
+  ];
+
+  // ---------- Utilities ----------
+  const ceil100 = (n) => Math.ceil(n / 100) * 100;
+  const nowISO = () => new Date().toISOString();
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem("mj_quiz_img_v1");
+      if(!raw) return null;
+      return JSON.parse(raw);
+    } catch { return null; }
+  }
+  function saveState(s){
+    localStorage.setItem("mj_quiz_img_v1", JSON.stringify(s));
+  }
+
+  // ---------- State ----------
+  const state = loadState() ?? { score: 0, total: 0, streak: 0, mistakes: [] };
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const elScore = $("score");
+  const elTotal = $("total");
+  const elStreak = $("streak");
+  const elMistakeLog = $("mistakeLog");
+  const elAnswer = $("answer");
+  const elSubmit = $("submitBtn");
+  const elNext = $("nextBtn");
+  const elReset = $("resetBtn");
+  const elResult = $("result");
+  const elDetailBox = $("detailBox");
+  const elDetail = $("detail");
+
+  const elHandImg = $("handImg");
+  const elHandFallback = $("handFallback");
+
+  const elRoundWind = $("roundWind");
+  const elDealerOrChild = $("dealerOrChild");
+  const elWinType = $("winType");
+  const elDoraIndicator = $("doraIndicator");
+  const elFuHan = $("fuHan");
+
+  function renderStats(){
+    elScore.textContent = state.score;
+    elTotal.textContent = state.total;
+    elStreak.textContent = state.streak;
+  }
+  function renderMistakes(){
+    const items = state.mistakes.slice(-10).reverse();
+    if(items.length === 0){
+      elMistakeLog.innerHTML = `<div class="small">まだありません。</div>`;
+      return;
+    }
+    elMistakeLog.innerHTML = items.map(m => `
+      <div class="log-item">
+        <div><b>${escapeHtml(m.q)}</b></div>
+        <div class="small">あなた：${escapeHtml(m.your)} ／ 正解：<b>${escapeHtml(m.correct)}</b></div>
+      </div>
+    `).join("");
+  }
+
+  // ---------- Mahjong Points ----------
+  function limitCategory(han, fu){
+    // 数え役満（13翻以上）
+    if(han >= 13) return { type: "役満", base: 8000, note: "数え役満(13翻以上)" };
+    if(han >= 11) return { type: "三倍満", base: 6000, note: "11〜12翻" };
+    if(han >= 8)  return { type: "倍満", base: 4000, note: "8〜10翻" };
+    if(han >= 6)  return { type: "跳満", base: 3000, note: "6〜7翻" };
+
+    // 満貫条件：5翻、または4翻40符以上、または3翻70符以上
+    if(han >= 5) return { type: "満貫", base: 2000, note: "5翻" };
+    if(han === 4 && fu >= 40) return { type: "満貫", base: 2000, note: "4翻40符以上" };
+    if(han === 3 && fu >= 70) return { type: "満貫", base: 2000, note: "3翻70符以上" };
+    return null;
+  }
+
+  function calcBasePoints(han, fu){
+    const lim = limitCategory(han, fu);
+    if(lim) return { base: lim.base, limit: lim };
+
+    const base = fu * (2 ** (han + 2));
+    if(base > 2000){
+      return { base: 2000, limit: { type: "満貫", base: 2000, note: "基本点が2000超のため満貫" } };
+    }
+    return { base, limit: null };
+  }
+
+  function calcPayments(han, fu, isDealer, isTsumo){
+    const { base, limit } = calcBasePoints(han, fu);
+    let detail = [];
+    detail.push(`符・翻：${fu}符 ${han}翻`);
+    if(limit){
+      detail.push(`上限：${limit.type}（${limit.note}） → 基本点=${limit.base}`);
+    } else {
+      detail.push(`基本点 = 符 × 2^(翻+2) = ${fu} × 2^(${han}+2) = ${base}`);
+    }
+
+    if(!isTsumo){
+      const mult = isDealer ? 6 : 4;
+      const raw = base * mult;
+      const pay = ceil100(raw);
+      detail.push(`ロン倍率：×${mult}（${isDealer ? "親" : "子"}）`);
+      detail.push(`点数 = ${base}×${mult} = ${raw} → 100点単位切り上げ → ${pay}`);
+      return { label: `${pay}`, canonical: { type:"ron", ron: pay }, detail: detail.join("\n") };
+    } else {
+      if(isDealer){
+        const rawEach = base * 2;
+        const each = ceil100(rawEach);
+        detail.push(`ツモ（親）：各自 = ${base}×2 = ${rawEach} → 切り上げ → ${each}`);
+        return { label: `${each}オール`, canonical: { type:"tsumo_dealer", each }, detail: detail.join("\n") };
+      } else {
+        const rawChild = base * 1;
+        const rawDealer = base * 2;
+        const childPay = ceil100(rawChild);
+        const dealerPay = ceil100(rawDealer);
+        detail.push(`ツモ（子）：子 = ${base}×1 = ${rawChild} → 切り上げ → ${childPay}`);
+        detail.push(`ツモ（子）：親 = ${base}×2 = ${rawDealer} → 切り上げ → ${dealerPay}`);
+        return { label: `${dealerPay}/${childPay}`, canonical: { type:"tsumo_child", dealerPay, childPay }, detail: detail.join("\n") };
+      }
+    }
+  }
+
+  // ---------- Answer Parse ----------
+  function normalizeInput(s){
+    return String(s).trim()
+      .replaceAll(" ", "")
+      .replaceAll("　","")
+      .replaceAll("／","/")
+      .replaceAll("円","")
+      .replaceAll(",","")
+      .toLowerCase();
+  }
+  function parseAnswer(raw){
+    const s = normalizeInput(raw);
+    if(!s) return null;
+
+    const mAll = s.match(/^(\d+)(?:オール|all)$/);
+    if(mAll) return { type:"tsumo_dealer", each: parseInt(mAll[1],10) };
+
+    const mSplit = s.match(/^(\d+)\/(\d+)$/);
+    if(mSplit) return { type:"tsumo_child", dealerPay: parseInt(mSplit[1],10), childPay: parseInt(mSplit[2],10) };
+
+    const mNum = s.match(/^\d+$/);
+    if(mNum) return { type:"ron", ron: parseInt(s,10) };
+
+    return { type:"unknown", raw:s };
+  }
+  function equalCanonical(a, b){
+    if(!a || !b) return false;
+    if(a.type !== b.type) return false;
+    if(a.type === "ron") return a.ron === b.ron;
+    if(a.type === "tsumo_dealer") return a.each === b.each;
+    if(a.type === "tsumo_child") return a.dealerPay === b.dealerPay && a.childPay === b.childPay;
+    return false;
+  }
+
+  // ---------- Quiz ----------
+  const ROUND_WINDS = ["東場", "南場"]; // ランダム表示
+  let current = null;
+  let locked = false;
+
+  function showHandImageOrFallback(q){
+    if(q.img){
+      elHandImg.src = q.img;
+      elHandImg.style.display = "block";
+      elHandFallback.style.display = "none";
+      elHandImg.onerror = () => {
+        // 画像が見つからない時はfallback表示
+        elHandImg.style.display = "none";
+        elHandFallback.style.display = "block";
+        elHandFallback.textContent = q.handText || "（画像を読み込めませんでした）";
+      };
+    } else {
+      elHandImg.style.display = "none";
+      elHandFallback.style.display = "block";
+      elHandFallback.textContent = q.handText || "（画像未設定）";
+    }
+  }
+
+  function makeQuestion(){
+    if(!QUESTION_BANK.length) throw new Error("QUESTION_BANK が空です");
+
+    const baseQ = pick(QUESTION_BANK);
+
+    // 指定どおりランダム設定
+    const round = pick(ROUND_WINDS);           // 東場or南場
+    const isDealer = Math.random() < 0.5;      // 親or子
+    const isTsumo = Math.random() < 0.5;       // ツモorロン
+
+    const calc = calcPayments(baseQ.han, baseQ.fu, isDealer, isTsumo);
+
+    // 表示用ラベル
+    const dealerLabel = isDealer ? "親" : "子";
+    const winLabel = isTsumo ? "ツモ" : "ロン";
+
+    // 問題文（履歴用）
+    const qText = `【${baseQ.fu}符${baseQ.han}翻 / ${dealerLabel} / ${round} / ${winLabel} / 供託0 本場0 / ドラ:${baseQ.doraIndicator}】`;
+
+    return {
+      ...baseQ,
+      round,
+      isDealer,
+      isTsumo,
+      dealerLabel,
+      winLabel,
+      qText,
+      correctLabel: calc.label,
+      canonical: calc.canonical,
+      detail: [
+        qText,
+        "",
+        calc.detail
+      ].join("\n")
+    };
+  }
+
+  function renderQuestion(){
+    current = makeQuestion();
+    locked = false;
+
+    // 画像表示
+    showHandImageOrFallback(current);
+
+    // サイド情報表示
+    elRoundWind.textContent = current.round;
+    elDealerOrChild.textContent = current.dealerLabel;
+    elWinType.textContent = current.winLabel;
+    elDoraIndicator.textContent = current.doraIndicator || "-";
+    elFuHan.textContent = `${current.fu}符 ${current.han}翻`;
+
+    // 入力/結果リセット
+    elAnswer.value = "";
+    elAnswer.focus();
+    elResult.innerHTML = "";
+    elDetailBox.style.display = "none";
+    elDetail.textContent = "";
+    elSubmit.disabled = false;
+    elNext.disabled = true;
+  }
+
+  function submit(){
+    if(locked) return;
+    const parsed = parseAnswer(elAnswer.value);
+    if(!parsed || parsed.type === "unknown"){
+      elResult.innerHTML = `<div class="ng">入力形式が合っていません。</div>
+      <div class="meta">例：ロン→<b>3900</b> ／ 子ツモ→<b>2000/1000</b> ／ 親ツモ→<b>2000オール</b></div>`;
+      return;
+    }
+
+    locked = true;
+    elSubmit.disabled = true;
+    elNext.disabled = false;
+
+    state.total += 1;
+    const ok = equalCanonical(parsed, current.canonical);
+
+    if(ok){
+      state.score += 1;
+      state.streak += 1;
+      elResult.innerHTML = `<div class="ok">正解！ ✅　正解：<b>${escapeHtml(current.correctLabel)}</b></div>`;
+    } else {
+      state.streak = 0;
+      const your = normalizeInput(elAnswer.value) || "(空)";
+      state.mistakes.push({
+        ts: nowISO(),
+        q: current.qText,
+        correct: current.correctLabel,
+        your: your
+      });
+      if(state.mistakes.length > 50) state.mistakes = state.mistakes.slice(-50);
+      elResult.innerHTML = `<div class="ng">不正解 ❌　正解：<b>${escapeHtml(current.correctLabel)}</b></div>`;
+    }
+
+    elDetailBox.style.display = "block";
+    elDetail.textContent = current.detail;
+
+    saveState(state);
+    renderStats();
+    renderMistakes();
+  }
+
+  function resetAll(){
+    if(!confirm("スコアと間違い履歴をリセットします。よろしいですか？")) return;
+    state.score = 0;
+    state.total = 0;
+    state.streak = 0;
+    state.mistakes = [];
+    saveState(state);
+    renderStats();
+    renderMistakes();
+    renderQuestion();
+  }
+
+  // ---------- Init ----------
+  renderStats();
+  renderMistakes();
+  renderQuestion();
+
+  elSubmit.addEventListener("click", submit);
+  elNext.addEventListener("click", renderQuestion);
+  elReset.addEventListener("click", resetAll);
+  elAnswer.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){
+      if(!locked) submit();
+      else renderQuestion();
+    }
+  });
+})();
+</script>
+</body>
+</html>
