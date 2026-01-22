@@ -93,7 +93,7 @@
   <div class="wrap">
     <div class="grid">
       <div class="card">
-        <h1>麻雀 点数計算クイズ（画像つき・符/翻）</h1>
+        <h1>麻雀 点数計算クイズ（画像つき・点数当て）</h1>
 
         <div class="row meta">
           <span class="badge">リーチ麻雀 / 赤あり</span>
@@ -113,7 +113,6 @@
             <div class="kv"><div class="k">親/子</div><div class="v" id="dealerOrChild">子</div></div>
             <div class="kv"><div class="k">あがり</div><div class="v" id="winType">ロン</div></div>
             <div class="kv"><div class="k">ドラ表示</div><div class="v" id="doraIndicator">🀙</div></div>
-            <div class="kv"><div class="k">符・翻（採点用）</div><div class="v" id="fuHan">30符 2翻</div></div>
 
             <div class="hint">
               入力ルール：<br>
@@ -125,8 +124,17 @@
         </div>
 
         <div class="row" style="margin-top:12px;">
-          <input id="answer" type="text" inputmode="text" autocomplete="off"
-                 placeholder="例：3900 / 2000/1000 / 2000オール" />
+          <input
+            id="answer"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9/]*"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="例：3900 / 2000/1000 / 2000オール"
+          />
           <button id="submitBtn">答える（Enter）</button>
           <button class="secondary" id="nextBtn" disabled>次へ</button>
           <button class="secondary" id="resetBtn" title="スコアと履歴をリセット">リセット</button>
@@ -140,7 +148,7 @@
         </details>
 
         <div class="small" style="margin-top:10px;">
-          ※画像は表示用です。点数採点は「符・翻（採点用）」と「親子/ツモロン」に基づきます。<br>
+          ※画像は表示用です。点数採点は内部の「符・翻（問題データ）」と「親子/ツモロン」に基づきます。<br>
           ※東場/南場は出題状況として表示します（点数計算自体には影響しません）。
         </div>
       </div>
@@ -160,7 +168,7 @@
   // =========================
   // img: GitHub Pagesなら images/xxx.jpg のように置けます
   // handText: 画像がない場合の代替表示（牌のUnicodeなど）
-  // fu/han: 点数計算の入力値（問題として固定）
+  // fu/han: 点数計算の入力値（画面には表示しない）
   // doraIndicator: 画像の横に固定表示（文字でもOK）
   const QUESTION_BANK = [
     {
@@ -202,13 +210,13 @@
 
   function loadState(){
     try{
-      const raw = localStorage.getItem("mj_quiz_img_v1");
+      const raw = localStorage.getItem("mj_quiz_img_v2");
       if(!raw) return null;
       return JSON.parse(raw);
     } catch { return null; }
   }
   function saveState(s){
-    localStorage.setItem("mj_quiz_img_v1", JSON.stringify(s));
+    localStorage.setItem("mj_quiz_img_v2", JSON.stringify(s));
   }
 
   // ---------- State ----------
@@ -235,7 +243,6 @@
   const elDealerOrChild = $("dealerOrChild");
   const elWinType = $("winType");
   const elDoraIndicator = $("doraIndicator");
-  const elFuHan = $("fuHan");
 
   function renderStats(){
     elScore.textContent = state.score;
@@ -362,7 +369,6 @@
       elHandImg.style.display = "block";
       elHandFallback.style.display = "none";
       elHandImg.onerror = () => {
-        // 画像が見つからない時はfallback表示
         elHandImg.style.display = "none";
         elHandFallback.style.display = "block";
         elHandFallback.textContent = q.handText || "（画像を読み込めませんでした）";
@@ -376,7 +382,6 @@
 
   function makeQuestion(){
     if(!QUESTION_BANK.length) throw new Error("QUESTION_BANK が空です");
-
     const baseQ = pick(QUESTION_BANK);
 
     // 指定どおりランダム設定
@@ -390,8 +395,8 @@
     const dealerLabel = isDealer ? "親" : "子";
     const winLabel = isTsumo ? "ツモ" : "ロン";
 
-    // 問題文（履歴用）
-    const qText = `【${baseQ.fu}符${baseQ.han}翻 / ${dealerLabel} / ${round} / ${winLabel} / 供託0 本場0 / ドラ:${baseQ.doraIndicator}】`;
+    // 履歴用（符・翻は画面に出さないが、間違いログと詳細には残す）
+    const qText = `【${dealerLabel} / ${round} / ${winLabel} / 供託0 本場0 / ドラ:${baseQ.doraIndicator} / (${baseQ.fu}符${baseQ.han}翻)】`;
 
     return {
       ...baseQ,
@@ -415,15 +420,13 @@
     current = makeQuestion();
     locked = false;
 
-    // 画像表示
     showHandImageOrFallback(current);
 
-    // サイド情報表示
+    // サイド情報表示（符・翻は表示しない）
     elRoundWind.textContent = current.round;
     elDealerOrChild.textContent = current.dealerLabel;
     elWinType.textContent = current.winLabel;
     elDoraIndicator.textContent = current.doraIndicator || "-";
-    elFuHan.textContent = `${current.fu}符 ${current.han}翻`;
 
     // 入力/結果リセット
     elAnswer.value = "";
@@ -496,11 +499,19 @@
   elSubmit.addEventListener("click", submit);
   elNext.addEventListener("click", renderQuestion);
   elReset.addEventListener("click", resetAll);
+
   elAnswer.addEventListener("keydown", (e) => {
     if(e.key === "Enter"){
       if(!locked) submit();
       else renderQuestion();
     }
+  });
+
+  // 追加：iOSなどでIME状態が残る場合があるので、フォーカス時に末尾へ
+  elAnswer.addEventListener("focus", () => {
+    const v = elAnswer.value;
+    elAnswer.value = "";
+    elAnswer.value = v;
   });
 })();
 </script>
